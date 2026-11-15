@@ -311,6 +311,17 @@ def main():
     video_count = deliver_items(
         VIDEO_WEBHOOK_URL, new_videos, notified, "video notification"
     )
+
+    # Announce an empty result only after both YouTube channels were checked
+    # successfully. API/network errors raise earlier and never reach this point.
+    if video_count == 0:
+        send_discord_message(
+            VIDEO_WEBHOOK_URL,
+            "ℹ️ **今回の確認では新着動画はありませんでした。**\n"
+            "＝LOVE公式ch・イコノイジョイchを確認しました。",
+        )
+        print("Sent no-new-videos announcement.")
+
     news_count = deliver_items(
         NEWS_WEBHOOK_URL, new_news, notified, "NEWS notification"
     )
