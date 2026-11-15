@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import feedparser
@@ -85,19 +86,60 @@ def get_video_id(entry):
     return video_id if VIDEO_ID_PATTERN.fullmatch(video_id or "") else None
 
 
+def fetch_youtube_feed(rss_url, channel_name):
+    # YouTube's RSS endpoint can temporarily return 404/5xx even for
+    # valid channels. Retry transient failures instead of failing immediately.
+    retry_delays = (0, 5, 15)
+    last_error = None
+
+    for attempt, delay in enumerate(retry_delays, start=1):
+        if delay:
+            print(
+                f"Retrying YouTube RSS for {channel_name} "
+                f"after {delay} seconds (attempt {attempt}/3)."
+            )
+            time.sleep(delay)
+
+        try:
+            response = requests.get(
+                rss_url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=20,
+            )
+
+            if response.status_code in (404, 429, 500, 502, 503, 504):
+                response.raise_for_status()
+
+            response.raise_for_status()
+            return response.content
+
+        except (requests.Timeout, requests.ConnectionError) as error:
+            last_error = error
+        except requests.HTTPError as error:
+            status = error.response.status_code if error.response is not None else None
+            if status not in (404, 429, 500, 502, 503, 504):
+                raise
+            last_error = error
+
+        print(
+            f"YouTube RSS request failed for {channel_name} "
+            f"(attempt {attempt}/3): {last_error}"
+        )
+
+    raise RuntimeError(
+        f"Could not retrieve YouTube RSS for {channel_name} after 3 attempts. "
+        "This may be a temporary YouTube RSS outage; no video history was changed."
+    ) from last_error
+
+
 def collect_new_videos(notified):
     new_videos = []
     queued_urls = set()
 
     for channel_name, channel_id in YOUTUBE_CHANNELS:
         rss_url = YOUTUBE_RSS_URL.format(channel_id=channel_id)
-        response = requests.get(
-            rss_url,
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=20,
-        )
-        response.raise_for_status()
-        feed = feedparser.parse(response.content)
+        feed_content = fetch_youtube_feed(rss_url, channel_name)
+        feed = feedparser.parse(feed_content)
 
         if feed.bozo and not feed.entries:
             raise RuntimeError(f"Could not parse YouTube RSS for {channel_name}.")
