@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 
 WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 # Step 4 で発行される自分の GitHub Pages のURLに書き換える
-PLAYER_BASE_URL = "https://github.io"
+PLAYER_BASE_URL = "https://bokuhito17-dev.github.io/eqlv/"
 HISTORY_FILE = "notified.json"
 
 if os.path.exists(HISTORY_FILE):
