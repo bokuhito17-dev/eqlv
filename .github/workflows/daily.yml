@@ -1,4 +1,3 @@
-
 name: Daily Equal Love Check
 
 on:
@@ -16,6 +15,7 @@ jobs:
 
     steps:
       - name: Checkout repository
+        id: checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -26,14 +26,21 @@ jobs:
       - name: Install dependencies
         run: pip install feedparser requests beautifulsoup4
 
+      - name: Validate Python syntax
+        run: python -m py_compile check.py
+
       - name: Run check script
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_VIDEO_WEBHOOK_URL: ${{ secrets.DISCORD_VIDEO_WEBHOOK_URL }}
+          DISCORD_NEWS_WEBHOOK_URL: ${{ secrets.DISCORD_NEWS_WEBHOOK_URL }}
         run: python check.py
 
+      # Even if a later notification fails, save history for messages
+      # that were already delivered successfully.
       - name: Commit updated history
+        if: always() && steps.checkout.outcome == 'success'
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add notified.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update notified history" && git push)
+          git add notified.json video_baseline.json
+          git diff --cached --quiet || (git commit -m "Update notified history" && git push)
