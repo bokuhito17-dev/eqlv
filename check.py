@@ -273,6 +273,9 @@ def send_discord_message(webhook_url, content):
             "content": content,
             "allowed_mentions": {"parse": []},
         },
+        headers={
+            "User-Agent": "DiscordBot (https://github.com/bokuhito17-dev/eqlv, 1.0)",
+        },
         timeout=20,
     )
     response.raise_for_status()
