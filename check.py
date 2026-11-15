@@ -1,15 +1,14 @@
 import json
 import os
 import re
-import time
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import urljoin, urlparse
 
-import feedparser
 import requests
 from bs4 import BeautifulSoup
 
 VIDEO_WEBHOOK_URL = os.environ.get("DISCORD_VIDEO_WEBHOOK_URL", "").strip()
 NEWS_WEBHOOK_URL = os.environ.get("DISCORD_NEWS_WEBHOOK_URL", "").strip()
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 
 PLAYER_BASE_URL = "https://bokuhito17-dev.github.io/eqlv/"
 HISTORY_FILE = "notified.json"
@@ -18,8 +17,8 @@ YOUTUBE_CHANNELS = [
     ("＝LOVE公式ch", "UCv7VutirxDn3RWIJXI68n_A"),
     ("イコノイジョイch", "UCWHh6SdvJWrPuf1oJrHbX3A"),
 ]
+YOUTUBE_API_BASE_URL = "https://www.googleapis.com/youtube/v3"
 NEWS_URL = "https://equal-love.jp/news/"
-YOUTUBE_RSS_URL = "https://www.youtube.com/xml/feeds/videos.xml?channel_id={channel_id}"
 VIDEO_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]{11}$")
 
 
@@ -65,71 +64,131 @@ def require_webhook(name, value):
         )
 
 
-def send_discord_message(webhook_url, content):
-    response = requests.post(
-        webhook_url,
-        json={
-            "content": content,
-            "allowed_mentions": {"parse": []},
-        },
-        timeout=20,
-    )
-    response.raise_for_status()
+def youtube_api_get(endpoint, params, context):
+    request_params = dict(params)
+    request_params["key"] = YOUTUBE_API_KEY
 
+    try:
+        response = requests.get(
+            f"{YOUTUBE_API_BASE_URL}/{endpoint}",
+            params=request_params,
+            timeout=20,
+        )
+    except requests.RequestException as error:
+        # Do not print the exception text: request URLs can contain the API key.
+        raise RuntimeError(
+            f"YouTube Data API request failed for {context} "
+            f"({type(error).__name__})."
+        ) from None
 
-def get_video_id(entry):
-    video_id = entry.get("yt_videoid")
-    if not video_id:
-        query = parse_qs(urlparse(entry.get("link", "")).query)
-        video_id = query.get("v", [""])[0]
+    try:
+        data = response.json()
+    except ValueError:
+        raise RuntimeError(
+            f"YouTube Data API returned a non-JSON response for {context} "
+            f"(HTTP {response.status_code})."
+        ) from None
 
-    return video_id if VIDEO_ID_PATTERN.fullmatch(video_id or "") else None
-
-
-def fetch_youtube_feed(rss_url, channel_name):
-    # YouTube's RSS endpoint can temporarily return 404/5xx even for
-    # valid channels. Retry transient failures instead of failing immediately.
-    retry_delays = (0, 5, 15)
-    last_error = None
-
-    for attempt, delay in enumerate(retry_delays, start=1):
-        if delay:
-            print(
-                f"Retrying YouTube RSS for {channel_name} "
-                f"after {delay} seconds (attempt {attempt}/3)."
-            )
-            time.sleep(delay)
-
-        try:
-            response = requests.get(
-                rss_url,
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=20,
-            )
-
-            if response.status_code in (404, 429, 500, 502, 503, 504):
-                response.raise_for_status()
-
-            response.raise_for_status()
-            return response.content
-
-        except (requests.Timeout, requests.ConnectionError) as error:
-            last_error = error
-        except requests.HTTPError as error:
-            status = error.response.status_code if error.response is not None else None
-            if status not in (404, 429, 500, 502, 503, 504):
-                raise
-            last_error = error
-
-        print(
-            f"YouTube RSS request failed for {channel_name} "
-            f"(attempt {attempt}/3): {last_error}"
+    if not response.ok:
+        error_data = data.get("error", {}) if isinstance(data, dict) else {}
+        message = error_data.get("message", "No error message provided.")
+        reasons = [
+            item.get("reason")
+            for item in error_data.get("errors", [])
+            if isinstance(item, dict) and item.get("reason")
+        ]
+        reason_text = ", ".join(reasons) if reasons else "unknown"
+        raise RuntimeError(
+            f"YouTube Data API request failed for {context} "
+            f"(HTTP {response.status_code}; reason={reason_text}; "
+            f"message={message}). Check the API key, API activation, and quota."
         )
 
-    raise RuntimeError(
-        f"Could not retrieve YouTube RSS for {channel_name} after 3 attempts. "
-        "This may be a temporary YouTube RSS outage; no video history was changed."
-    ) from last_error
+    if not isinstance(data, dict):
+        raise RuntimeError(
+            f"YouTube Data API returned an unexpected response for {context}."
+        )
+
+    return data
+
+
+def get_uploads_playlist_id(channel_name, channel_id):
+    data = youtube_api_get(
+        "channels",
+        {
+            "part": "contentDetails",
+            "id": channel_id,
+        },
+        f"channel lookup: {channel_name}",
+    )
+
+    channels = data.get("items", [])
+    if not channels:
+        raise RuntimeError(
+            f"YouTube Data API returned no channel for {channel_name} "
+            f"({channel_id}). Check the configured channel ID."
+        )
+
+    uploads_id = (
+        channels[0]
+        .get("contentDetails", {})
+        .get("relatedPlaylists", {})
+        .get("uploads")
+    )
+    if not uploads_id:
+        raise RuntimeError(
+            f"Could not find the uploads playlist for {channel_name}."
+        )
+
+    return uploads_id
+
+
+def get_latest_channel_videos(channel_name, channel_id):
+    uploads_id = get_uploads_playlist_id(channel_name, channel_id)
+    data = youtube_api_get(
+        "playlistItems",
+        {
+            "part": "snippet,contentDetails",
+            "playlistId": uploads_id,
+            "maxResults": 5,
+        },
+        f"uploads playlist: {channel_name}",
+    )
+
+    items = data.get("items", [])
+    if not items:
+        raise RuntimeError(
+            f"YouTube Data API returned no uploads for {channel_name}. "
+            "Refusing to treat an empty result as a valid video check."
+        )
+
+    videos = []
+    for item in items:
+        snippet = item.get("snippet", {})
+        content_details = item.get("contentDetails", {})
+        resource_id = snippet.get("resourceId", {})
+        video_id = (
+            content_details.get("videoId")
+            or resource_id.get("videoId")
+        )
+
+        if not VIDEO_ID_PATTERN.fullmatch(video_id or ""):
+            print(f"Skipping an item without a valid video ID for {channel_name}.")
+            continue
+
+        title = " ".join(snippet.get("title", "新着動画").split())
+        videos.append((video_id, title))
+
+    if not videos:
+        raise RuntimeError(
+            f"YouTube Data API returned no usable video IDs for {channel_name}."
+        )
+
+    print(
+        f"YouTube Data API diagnostic for {channel_name}: "
+        f"uploads_playlist_items={len(items)}, usable_videos={len(videos)}."
+    )
+    return videos
 
 
 def collect_new_videos(notified):
@@ -137,39 +196,17 @@ def collect_new_videos(notified):
     queued_urls = set()
 
     for channel_name, channel_id in YOUTUBE_CHANNELS:
-        rss_url = YOUTUBE_RSS_URL.format(channel_id=channel_id)
-        feed_content = fetch_youtube_feed(rss_url, channel_name)
-        feed = feedparser.parse(feed_content)
+        videos = get_latest_channel_videos(channel_name, channel_id)
 
-        print(
-            f"YouTube feed diagnostic for {channel_name}: "
-            f"entries={len(feed.entries)}, bozo={feed.bozo}, "
-            f"feed_title={feed.feed.get('title', '(missing)')!r}"
-        )
-
-        if feed.bozo and not feed.entries:
-            raise RuntimeError(f"Could not parse YouTube RSS for {channel_name}.")
-
-        for entry in feed.entries[:5]:
-            video_id = get_video_id(entry)
-            if not video_id:
-                print(
-                    f"Could not extract video ID for {channel_name}: "
-                    f"title={entry.get('title', '(missing)')!r}, "
-                    f"link={entry.get('link', '(missing)')!r}, "
-                    f"keys={sorted(entry.keys())}"
-                )
-                continue
-
+        for video_id, title in videos:
             video_url = f"https://www.youtube.com/watch?v={video_id}"
             if video_url in notified:
-                print(f"Already recorded video for {channel_name}: {video_url}")
+                print(f"Already recorded video for {channel_name}: {video_id}")
                 continue
             if video_url in queued_urls:
                 continue
 
             player_url = f"{PLAYER_BASE_URL}?v={video_id}"
-            title = " ".join(entry.get("title", "新着動画").split())
             message = (
                 f"🎬 **【{channel_name}】** {title}\n"
                 f"▶ [無菌専用プレイヤーで開く]({player_url})"
@@ -229,17 +266,28 @@ def deliver_items(webhook_url, items, notified, label):
     return delivered
 
 
+def send_discord_message(webhook_url, content):
+    response = requests.post(
+        webhook_url,
+        json={
+            "content": content,
+            "allowed_mentions": {"parse": []},
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+
+
 def main():
     require_webhook("DISCORD_VIDEO_WEBHOOK_URL", VIDEO_WEBHOOK_URL)
     require_webhook("DISCORD_NEWS_WEBHOOK_URL", NEWS_WEBHOOK_URL)
+    require_webhook("YOUTUBE_API_KEY", YOUTUBE_API_KEY)
 
     notified = load_history()
-
     new_videos = collect_new_videos(notified)
 
-    # The previous checker did not reliably read the YouTube RSS feeds.
-    # On the first corrected run, record the currently visible videos as a
-    # baseline instead of flooding Discord with older uploads.
+    # On the first API-based run, record the latest uploads as a baseline
+    # instead of flooding Discord with older videos.
     if not load_video_baseline():
         if not new_videos:
             raise RuntimeError(
