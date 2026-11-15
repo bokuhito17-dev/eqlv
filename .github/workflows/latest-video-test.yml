@@ -1,0 +1,127 @@
+name: Latest Video Discord Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send-latest-video-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch latest videos and send test notifications
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          DISCORD_VIDEO_WEBHOOK_URL: ${{ secrets.DISCORD_VIDEO_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import requests
+
+          API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
+          WEBHOOK = os.environ.get("DISCORD_VIDEO_WEBHOOK_URL", "").strip()
+          API_BASE = "https://www.googleapis.com/youtube/v3"
+          PLAYER_BASE = "https://bokuhito17-dev.github.io/eqlv/"
+          CHANNELS = [
+              ("＝LOVE公式ch", "UCv7VutirxDn3RWIJXI68n_A"),
+              ("イコノイジョイch", "UCWHh6SdvJWrPuf1oJrHbX3A"),
+          ]
+
+          if not API_KEY:
+              raise SystemExit("YOUTUBE_API_KEY secret is missing.")
+          if not WEBHOOK:
+              raise SystemExit("DISCORD_VIDEO_WEBHOOK_URL secret is missing.")
+
+          session = requests.Session()
+          session.headers.update({
+              "User-Agent": "eqlv-latest-video-test/1.0 (GitHub Actions)"
+          })
+
+          def api_get(endpoint, params):
+              params = dict(params)
+              params["key"] = API_KEY
+              try:
+                  response = session.get(
+                      f"{API_BASE}/{endpoint}", params=params, timeout=20
+                  )
+                  response.raise_for_status()
+                  return response.json()
+              except requests.RequestException as error:
+                  # Avoid printing request URLs because they contain the API key.
+                  raise RuntimeError(
+                      f"YouTube API request failed ({type(error).__name__})."
+                  ) from None
+
+          sent = 0
+          for channel_name, channel_id in CHANNELS:
+              channel_data = api_get("channels", {
+                  "part": "contentDetails",
+                  "id": channel_id,
+              })
+              channel_items = channel_data.get("items", [])
+              if not channel_items:
+                  raise RuntimeError(f"No channel returned for {channel_name}.")
+
+              uploads_id = (
+                  channel_items[0]
+                  .get("contentDetails", {})
+                  .get("relatedPlaylists", {})
+                  .get("uploads")
+              )
+              if not uploads_id:
+                  raise RuntimeError(f"No uploads playlist found for {channel_name}.")
+
+              playlist_data = api_get("playlistItems", {
+                  "part": "snippet,contentDetails",
+                  "playlistId": uploads_id,
+                  "maxResults": 5,
+              })
+              videos = []
+              for item in playlist_data.get("items", []):
+                  snippet = item.get("snippet", {})
+                  details = item.get("contentDetails", {})
+                  resource = snippet.get("resourceId", {})
+                  video_id = details.get("videoId") or resource.get("videoId")
+                  if not re.fullmatch(r"[0-9A-Za-z_-]{11}", video_id or ""):
+                      continue
+                  title = " ".join(snippet.get("title", "新着動画").split())
+                  videos.append((video_id, title))
+
+              if not videos:
+                  raise RuntimeError(f"No usable latest video found for {channel_name}.")
+
+              # Only the newest video is sent per channel; history files are untouched.
+              video_id, title = videos[0]
+              player_url = f"{PLAYER_BASE}?v={video_id}"
+              message = (
+                  f"🧪 **【新着動画通知テスト／{channel_name}】** {title}\n"
+                  f"▶ [無菌専用プレイヤーで開く]({player_url})\n"
+                  "これは最新動画を使った動作確認です。通常の新着通知ではありません。"
+              )
+
+              try:
+                  response = requests.post(
+                      WEBHOOK,
+                      json={
+                          "content": message,
+                          "allowed_mentions": {"parse": []},
+                      },
+                      headers={
+                          "User-Agent": "DiscordBot (https://github.com/bokuhito17-dev/eqlv, 1.0)"
+                      },
+                      timeout=20,
+                  )
+                  response.raise_for_status()
+              except requests.RequestException as error:
+                  raise RuntimeError(
+                      f"Discord delivery failed for {channel_name} "
+                      f"({type(error).__name__})."
+                  ) from None
+
+              sent += 1
+              print(f"Sent latest-video test for {channel_name}: {video_id}")
+
+          print(f"Completed: {sent} latest-video test notifications sent.")
+          PY
