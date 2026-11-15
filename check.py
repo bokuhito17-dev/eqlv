@@ -19,7 +19,7 @@ YOUTUBE_CHANNELS = [
     ("イコノイジョイch", "UCWHh6SdvJWrPuf1oJrHbX3A"),
 ]
 NEWS_URL = "https://equal-love.jp/news/"
-YOUTUBE_RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+YOUTUBE_RSS_URL = "https://www.youtube.com/xml/feeds/videos.xml?channel_id={channel_id}"
 VIDEO_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]{11}$")
 
 
