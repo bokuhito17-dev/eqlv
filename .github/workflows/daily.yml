@@ -28,7 +28,14 @@ jobs:
       - name: Run check script
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python check.py
+        
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "ERROR: Secret is empty"
+            exit 1
+          else
+            echo "SUCCESS: Secret is available"
+          fi
 
       - name: Commit updated history
         run: |
