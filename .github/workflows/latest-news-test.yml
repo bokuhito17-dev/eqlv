@@ -1,0 +1,90 @@
+name: Latest NEWS Discord Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send-latest-news-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Fetch latest official NEWS and send a test notification
+        env:
+          DISCORD_NEWS_WEBHOOK_URL: ${{ secrets.DISCORD_NEWS_WEBHOOK_URL }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import os
+          import requests
+          from bs4 import BeautifulSoup
+          from urllib.parse import urljoin, urlparse
+
+          NEWS_URL = "https://equal-love.jp/news/"
+          webhook_url = os.environ.get("DISCORD_NEWS_WEBHOOK_URL", "").strip()
+          if not webhook_url:
+              raise SystemExit("DISCORD_NEWS_WEBHOOK_URL is missing.")
+
+          response = requests.get(
+              NEWS_URL,
+              headers={"User-Agent": "Mozilla/5.0"},
+              timeout=20,
+          )
+          response.raise_for_status()
+          response.encoding = response.apparent_encoding
+          soup = BeautifulSoup(response.text, "html.parser")
+
+          article = None
+          seen = set()
+          for anchor in soup.select("a[href*='/news/detail/']")[:8]:
+              article_url = urljoin(NEWS_URL, anchor.get("href", ""))
+              parsed_url = urlparse(article_url)
+              if parsed_url.netloc not in ("equal-love.jp", "www.equal-love.jp"):
+                  continue
+              title = " ".join(anchor.get_text(" ", strip=True).split())
+              if not title or article_url in seen:
+                  continue
+              seen.add(article_url)
+              article = (title, article_url)
+              break
+
+          if article is None:
+              raise SystemExit(
+                  "No usable official NEWS article was found; no Discord message was sent."
+              )
+
+          title, article_url = article
+          message = (
+              "🧪 **【公式NEWS通知テスト】**\n"
+              f"📢 **【＝LOVE公式NEWS】** {title}\n"
+              f"▶ [公式サイトで記事を読む]({article_url})\n"
+              f"実行ID: {os.environ['RUN_ID']}"
+          )
+
+          send_response = requests.post(
+              webhook_url,
+              json={
+                  "content": message,
+                  "allowed_mentions": {"parse": []},
+              },
+              headers={
+                  "User-Agent": "DiscordBot (https://github.com/bokuhito17-dev/eqlv, 1.0)",
+              },
+              timeout=20,
+          )
+          send_response.raise_for_status()
+          print("Official NEWS test notification was accepted by Discord.")
+          print(f"Article title: {title}")
+          print(f"Article URL: {article_url}")
+          print(f"HTTP status: {send_response.status_code}")
+          print("Notification history was not read or modified.")
+          PY
