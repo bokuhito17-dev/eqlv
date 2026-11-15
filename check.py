@@ -12,6 +12,7 @@ NEWS_WEBHOOK_URL = os.environ.get("DISCORD_NEWS_WEBHOOK_URL", "").strip()
 
 PLAYER_BASE_URL = "https://bokuhito17-dev.github.io/eqlv/"
 HISTORY_FILE = "notified.json"
+VIDEO_BASELINE_FILE = "video_baseline.json"
 YOUTUBE_CHANNELS = [
     ("＝LOVE公式ch", "UCv7VutirxDn3RWIJXI68n_A"),
     ("イコノイジョイch", "UCWHh6SdvJWrPuf1oJrHbX3A"),
@@ -163,6 +164,25 @@ def main():
     notified = load_history()
 
     new_videos = collect_new_videos(notified)
+
+    # The previous checker did not reliably read the YouTube RSS feeds.
+    # On the first corrected run, record the currently visible videos as a
+    # baseline instead of flooding Discord with older uploads.
+    if not load_video_baseline():
+        if not new_videos:
+            raise RuntimeError(
+                "No YouTube videos were returned; refusing to initialize the video baseline."
+            )
+        for video_url, _ in new_videos:
+            notified.add(video_url)
+        save_history(notified)
+        save_video_baseline()
+        print(
+            f"Initialized YouTube baseline with {len(new_videos)} existing videos. "
+            "They were not sent as new-video notifications."
+        )
+        new_videos = []
+
     new_news = collect_new_news(notified)
 
     video_count = deliver_items(
