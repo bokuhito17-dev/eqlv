@@ -317,7 +317,7 @@ def main():
     if video_count == 0:
         send_discord_message(
             VIDEO_WEBHOOK_URL,
-            "ℹ️ **今回の確認では新着動画はありませんでした。**\\n"
+            "ℹ️ **今回の確認では新着動画はありませんでした。**\n"
             "＝LOVE公式ch・イコノイジョイchを確認しました。",
         )
         print("Sent no-new-videos announcement.")
