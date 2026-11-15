@@ -54,7 +54,7 @@ def load_video_baseline():
 def save_video_baseline():
     with open(VIDEO_BASELINE_FILE, "w", encoding="utf-8") as file:
         json.dump({"initialized": True}, file, indent=2)
-        file.write("\\n")
+        file.write("\n")
 
 
 def require_webhook(name, value):
