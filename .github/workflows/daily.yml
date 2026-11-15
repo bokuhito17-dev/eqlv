@@ -24,7 +24,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install feedparser requests beautifulsoup4
+        run: pip install requests beautifulsoup4
 
       - name: Validate Python syntax
         run: python -m py_compile check.py
@@ -33,6 +33,7 @@ jobs:
         env:
           DISCORD_VIDEO_WEBHOOK_URL: ${{ secrets.DISCORD_VIDEO_WEBHOOK_URL }}
           DISCORD_NEWS_WEBHOOK_URL: ${{ secrets.DISCORD_NEWS_WEBHOOK_URL }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: python check.py
 
       # Even if a later notification fails, save history for messages
