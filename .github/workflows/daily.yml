@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: pip install feedparser requests beautifulsoup4
 
+      - name: Validate Python syntax
+        run: python -m py_compile check.py
+
       - name: Run check script
         env:
           DISCORD_VIDEO_WEBHOOK_URL: ${{ secrets.DISCORD_VIDEO_WEBHOOK_URL }}
