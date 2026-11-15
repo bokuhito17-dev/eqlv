@@ -48,7 +48,10 @@ jobs:
                       "content": message + f"\n実行ID: {os.environ['RUN_ID']}",
                       "allowed_mentions": {"parse": []},
                   }).encode("utf-8"),
-                  headers={"Content-Type": "application/json"},
+                  headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "DiscordBot (https://github.com/bokuhito17-dev/eqlv, 1.0)",
+              },
                   method="POST",
               )
 
