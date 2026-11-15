@@ -1,0 +1,67 @@
+name: Discord Test Notification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send-test-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send test messages to both Discord channels
+        env:
+          DISCORD_VIDEO_WEBHOOK_URL: ${{ secrets.DISCORD_VIDEO_WEBHOOK_URL }}
+          DISCORD_NEWS_WEBHOOK_URL: ${{ secrets.DISCORD_NEWS_WEBHOOK_URL }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          targets = [
+              (
+                  "新着動画",
+                  os.environ.get("DISCORD_VIDEO_WEBHOOK_URL", "").strip(),
+                  "🧪 **テスト通知**\nこれは「新着動画」チャンネルへの送信テストです。実際の新着動画通知ではありません。",
+              ),
+              (
+                  "公式NEWS",
+                  os.environ.get("DISCORD_NEWS_WEBHOOK_URL", "").strip(),
+                  "🧪 **テスト通知**\nこれは「公式NEWS」チャンネルへの送信テストです。実際の公式NEWS通知ではありません。",
+              ),
+          ]
+
+          failed = False
+          for name, webhook_url, message in targets:
+              if not webhook_url:
+                  print(f"{name}: webhook secret is missing.")
+                  failed = True
+                  continue
+
+              request = Request(
+                  webhook_url + ("&" if "?" in webhook_url else "?") + "wait=true",
+                  data=json.dumps({
+                      "content": message + f"\n実行ID: {os.environ['RUN_ID']}",
+                      "allowed_mentions": {"parse": []},
+                  }).encode("utf-8"),
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
+              )
+
+              try:
+                  with urlopen(request, timeout=20) as response:
+                      print(f"{name}: Discord accepted the test message (HTTP {response.status}).")
+              except HTTPError as error:
+                  print(f"{name}: Discord rejected the test message (HTTP {error.code}).")
+                  failed = True
+              except (URLError, TimeoutError) as error:
+                  print(f"{name}: request failed ({type(error).__name__}).")
+                  failed = True
+
+          if failed:
+              raise SystemExit("One or more Discord test messages could not be sent.")
+          PY
