@@ -141,17 +141,31 @@ def collect_new_videos(notified):
         feed_content = fetch_youtube_feed(rss_url, channel_name)
         feed = feedparser.parse(feed_content)
 
+        print(
+            f"YouTube feed diagnostic for {channel_name}: "
+            f"entries={len(feed.entries)}, bozo={feed.bozo}, "
+            f"feed_title={feed.feed.get('title', '(missing)')!r}"
+        )
+
         if feed.bozo and not feed.entries:
             raise RuntimeError(f"Could not parse YouTube RSS for {channel_name}.")
 
         for entry in feed.entries[:5]:
             video_id = get_video_id(entry)
             if not video_id:
-                print(f"Skipping an entry without a valid video ID: {channel_name}")
+                print(
+                    f"Could not extract video ID for {channel_name}: "
+                    f"title={entry.get('title', '(missing)')!r}, "
+                    f"link={entry.get('link', '(missing)')!r}, "
+                    f"keys={sorted(entry.keys())}"
+                )
                 continue
 
             video_url = f"https://www.youtube.com/watch?v={video_id}"
-            if video_url in notified or video_url in queued_urls:
+            if video_url in notified:
+                print(f"Already recorded video for {channel_name}: {video_url}")
+                continue
+            if video_url in queued_urls:
                 continue
 
             player_url = f"{PLAYER_BASE_URL}?v={video_id}"
