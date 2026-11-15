@@ -6,62 +6,110 @@
   <meta name="mobile-web-app-capable" content="yes">
   <title>無菌専用プレイヤー</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background-color: #121212;
-      color: #ffffff;
-      margin: 0;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+    :root {
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #121212;
+      color: #fff;
     }
+    * { box-sizing: border-box; }
+    body {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+    h1 { font-size: 22px; margin: 4px 0 18px; }
+    h2 { font-size: 18px; margin: 0 0 14px; }
     .video-container {
       width: 100%;
-      max-width: 800px;
       aspect-ratio: 16 / 9;
       background: #000;
-      margin-bottom: 12px;
+      border-radius: 12px;
+      overflow: hidden;
     }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
+    iframe { width: 100%; height: 100%; border: 0; }
     #player-status {
-      width: 100%;
-      max-width: 800px;
       min-height: 1.5em;
-      margin: 0 0 20px;
-      color: #bdbdbd;
-      font-size: 14px;
+      margin: 10px 2px 24px;
+      color: #bbb;
+      font-size: 13px;
+      line-height: 1.6;
     }
-    .song-list {
+    .panel {
+      padding: 18px;
+      margin: 18px 0;
+      background: #1d1d1d;
+      border: 1px solid #333;
+      border-radius: 12px;
+    }
+    .field { margin-bottom: 13px; }
+    label {
+      display: block;
+      margin-bottom: 7px;
+      color: #ddd;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    input {
+      display: block;
       width: 100%;
-      max-width: 800px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 10px;
-    }
-    button {
-      background-color: #2a2a2a;
-      color: #fff;
-      border: 1px solid #444;
-      padding: 12px;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid #555;
       border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      text-align: left;
+      background: #101010;
+      color: #fff;
+      font: inherit;
+      font-size: 16px;
     }
-    button:hover {
-      background-color: #e91e63;
-      border-color: #e91e63;
+    input:focus { outline: 2px solid #e91e63; outline-offset: 1px; }
+    button {
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 1px solid #555;
+      border-radius: 8px;
+      background: #303030;
+      color: #fff;
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:focus-visible { outline: 2px solid #e91e63; outline-offset: 2px; }
+    button.primary { width: 100%; background: #c2185b; border-color: #c2185b; font-weight: 700; }
+    button.primary:hover { background: #e91e63; }
+    button:hover { border-color: #e91e63; }
+    .song-list { display: grid; gap: 10px; }
+    .song-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid #383838;
+      border-radius: 9px;
+      background: #202020;
+    }
+    .song-name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+    .song-actions { display: flex; flex-shrink: 0; gap: 7px; }
+    .delete-button { color: #ffb4b4; }
+    .hint, .empty-message {
+      color: #aaa;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .hint { margin: 10px 0 0; }
+    .empty-message { margin: 0; }
+    @media (max-width: 480px) {
+      body { padding: 14px 12px 30px; }
+      .panel { padding: 14px; }
+      .song-item { align-items: flex-start; flex-direction: column; }
+      .song-actions { width: 100%; }
+      .song-actions button { flex: 1; }
     }
   </style>
 </head>
 <body>
-
-  <h3>🎤 コール練習＆公式動画プレイヤー</h3>
+  <h1>🎤 コール練習＆公式動画プレイヤー</h1>
 
   <div class="video-container">
     <iframe
@@ -77,43 +125,216 @@
     Discordの新着動画通知から開くと、対象動画がここに表示されます。
   </p>
 
-  <!-- 東京ドームのコール練習用プリセット（動画IDを書き換えて追加可能） -->
-  <div class="song-list">
-    <button onclick="playVideo('ここに動画IDを入れる')">🎵 コール練習曲 1</button>
-    <button onclick="playVideo('ここに動画IDを入れる')">🎵 コール練習曲 2</button>
-  </div>
+  <section class="panel" aria-labelledby="register-heading">
+    <h2 id="register-heading">コール動画を登録</h2>
+    <form id="video-form">
+      <div class="field">
+        <label for="song-title">曲名・動画名</label>
+        <input id="song-title" name="title" type="text" maxlength="80"
+          placeholder="例：青春サブリミナル" required>
+      </div>
+      <div class="field">
+        <label for="youtube-url">YouTube動画URL</label>
+        <input id="youtube-url" name="url" type="url" inputmode="url"
+          placeholder="https://www.youtube.com/watch?v=..." required>
+      </div>
+      <button class="primary" type="submit">この動画を登録</button>
+    </form>
+    <p class="hint">登録内容は、このブラウザの中だけに保存されます。他の端末とは共有されません。</p>
+  </section>
+
+  <section class="panel" aria-labelledby="list-heading">
+    <h2 id="list-heading">登録済みコール動画</h2>
+    <div id="song-list" class="song-list" aria-live="polite">
+      <p class="empty-message">まだ動画が登録されていません。</p>
+    </div>
+  </section>
 
   <script>
     const VIDEO_ID_PATTERN = /^[0-9A-Za-z_-]{11}$/;
+    const STORAGE_KEY = "eqlv-call-videos-v1";
+
+    function extractVideoId(value) {
+      let url;
+      try {
+        url = new URL(value);
+      } catch {
+        return null;
+      }
+
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      let videoId = null;
+
+      if (host === "youtu.be") {
+        videoId = url.pathname.split("/").filter(Boolean)[0];
+      } else if (
+        host === "youtube.com" ||
+        host === "m.youtube.com" ||
+        host === "youtube-nocookie.com"
+      ) {
+        if (url.pathname === "/watch") {
+          videoId = url.searchParams.get("v");
+        } else {
+          const parts = url.pathname.split("/").filter(Boolean);
+          if (["shorts", "live", "embed"].includes(parts[0])) {
+            videoId = parts[1];
+          }
+        }
+      }
+
+      return VIDEO_ID_PATTERN.test(videoId || "") ? videoId : null;
+    }
 
     function playVideo(videoId) {
       const status = document.getElementById("player-status");
       const player = document.getElementById("player");
 
       if (!VIDEO_ID_PATTERN.test(videoId || "")) {
-        status.textContent = "動画IDが正しくありません。Discordの新着動画通知から開いてください。";
+        status.textContent = "動画IDが正しくありません。YouTubeの動画URLを確認してください。";
         return;
       }
 
       const embedUrl =
         "https://www.youtube-nocookie.com/embed/" +
         encodeURIComponent(videoId) +
-        "?rel=0&modestbranding=1&playsinline=1&autoplay=1";
+        "?rel=0&playsinline=1&autoplay=1";
 
       player.src = embedUrl;
       status.textContent =
-        "動画を読み込みました。自動再生がブロックされた場合は、プレイヤーの再生ボタンを押してください。";
+        "動画を読み込みました。自動再生されない場合は、プレイヤーの再生ボタンを押してください。";
+      document.querySelector(".video-container").scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
     }
 
-    window.addEventListener("DOMContentLoaded", function () {
-      const params = new URLSearchParams(window.location.search);
-      const videoId = params.get("v");
-
-      if (videoId) {
-        playVideo(videoId);
+    function loadVideos() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return [];
+        const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter(item =>
+          item &&
+          typeof item.title === "string" &&
+          typeof item.videoId === "string" &&
+          VIDEO_ID_PATTERN.test(item.videoId)
+        );
+      } catch {
+        document.getElementById("player-status").textContent =
+          "保存データを読み込めませんでした。ブラウザのサイトデータ設定を確認してください。";
+        return [];
       }
+    }
+
+    let videos = loadVideos();
+
+    function saveVideos() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(videos));
+        return true;
+      } catch {
+        document.getElementById("player-status").textContent =
+          "保存できませんでした。ブラウザの空き容量やサイトデータ設定を確認してください。";
+        return false;
+      }
+    }
+
+    function renderVideos() {
+      const list = document.getElementById("song-list");
+      list.replaceChildren();
+
+      if (videos.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty-message";
+        empty.textContent = "まだ動画が登録されていません。";
+        list.appendChild(empty);
+        return;
+      }
+
+      videos.forEach((video, index) => {
+        const item = document.createElement("div");
+        item.className = "song-item";
+
+        const name = document.createElement("span");
+        name.className = "song-name";
+        name.textContent = video.title;
+
+        const actions = document.createElement("div");
+        actions.className = "song-actions";
+
+        const playButton = document.createElement("button");
+        playButton.type = "button";
+        playButton.textContent = "▶ 再生";
+        playButton.addEventListener("click", () => playVideo(video.videoId));
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-button";
+        deleteButton.textContent = "削除";
+        deleteButton.setAttribute("aria-label", video.title + "を削除");
+        deleteButton.addEventListener("click", () => {
+          if (!window.confirm("「" + video.title + "」を登録一覧から削除しますか？")) {
+            return;
+          }
+          const previous = videos;
+          videos = videos.filter((_, currentIndex) => currentIndex !== index);
+          if (saveVideos()) {
+            renderVideos();
+          } else {
+            videos = previous;
+          }
+        });
+
+        actions.append(playButton, deleteButton);
+        item.append(name, actions);
+        list.appendChild(item);
+      });
+    }
+
+    document.getElementById("video-form").addEventListener("submit", event => {
+      event.preventDefault();
+
+      const titleInput = document.getElementById("song-title");
+      const urlInput = document.getElementById("youtube-url");
+      const title = titleInput.value.trim();
+      const videoId = extractVideoId(urlInput.value.trim());
+
+      if (!title) {
+        titleInput.focus();
+        return;
+      }
+      if (!videoId) {
+        document.getElementById("player-status").textContent =
+          "YouTubeの動画URLを認識できませんでした。通常の動画・Shorts・共有URLを確認してください。";
+        urlInput.focus();
+        return;
+      }
+      if (videos.some(video => video.videoId === videoId)) {
+        document.getElementById("player-status").textContent =
+          "この動画はすでに登録されています。";
+        return;
+      }
+
+      videos.push({ title, videoId });
+      if (!saveVideos()) {
+        videos.pop();
+        return;
+      }
+
+      renderVideos();
+      event.target.reset();
+      document.getElementById("player-status").textContent = "「" + title + "」を登録しました。";
+      titleInput.focus();
+    });
+
+    window.addEventListener("DOMContentLoaded", () => {
+      renderVideos();
+
+      // Discordの新着動画通知から開く既存の ?v=VIDEO_ID 形式にも対応。
+      const videoId = new URLSearchParams(window.location.search).get("v");
+      if (videoId) playVideo(videoId);
     });
   </script>
-
 </body>
 </html>
