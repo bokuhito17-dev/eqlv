@@ -2,8 +2,8 @@ name: Daily Equal Love Check
 
 on:
   schedule:
-    # 毎週土曜・日曜の日本時間21:07（UTC 12:07）
-    - cron: '7 12 * * 6,0'
+    # 一時的に毎日 日本時間06:00（UTC 21:00）
+    - cron: '0 21 * * *'
   workflow_dispatch:
 
 permissions:
