@@ -1,10 +1,10 @@
+
 name: Daily Equal Love Check
 
 on:
   schedule:
-    # 毎日 日本時間 21:00（UTC 12:00）に実行
+    # 毎日 日本時間21:00（UTC 12:00）
     - cron: '0 12 * * *'
-  # 手動でテスト実行するためのボタンを有効化
   workflow_dispatch:
 
 permissions:
@@ -13,6 +13,7 @@ permissions:
 jobs:
   run-script:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,14 +29,7 @@ jobs:
       - name: Run check script
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        
-        run: |
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "ERROR: Secret is empty"
-            exit 1
-          else
-            echo "SUCCESS: Secret is available"
-          fi
+        run: python check.py
 
       - name: Commit updated history
         run: |
