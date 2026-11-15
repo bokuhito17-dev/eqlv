@@ -326,6 +326,15 @@ def main():
         NEWS_WEBHOOK_URL, new_news, notified, "NEWS notification"
     )
 
+    # Announce an empty result only after the official NEWS page was fetched
+    # and parsed successfully. Fetch errors raise earlier and never reach here.
+    if news_count == 0:
+        send_discord_message(
+            NEWS_WEBHOOK_URL,
+            "ℹ️ **今回の確認では新しい公式NEWSはありませんでした。**",
+        )
+        print("Sent no-new-NEWS announcement.")
+
     print(
         "Check completed. "
         f"New videos: {video_count}; new NEWS articles: {news_count}."
