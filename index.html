@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>無菌専用プレイヤー</title>
+  <title>YouTubeプレーヤー</title>
   <style>
     body {
       font-family: sans-serif;
@@ -15,6 +15,11 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+    }
+    h3 {
+      width: 100%;
+      max-width: 800px;
+      margin: 8px 0 16px;
     }
     .video-container {
       width: 100%;
@@ -28,6 +33,41 @@
       height: 100%;
       border: none;
     }
+    .video-form {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      gap: 8px;
+      margin: 8px 0 12px;
+    }
+    .video-form input {
+      flex: 1;
+      min-width: 0;
+      box-sizing: border-box;
+      padding: 12px;
+      border: 1px solid #555;
+      border-radius: 8px;
+      background: #242424;
+      color: #fff;
+      font-size: 14px;
+    }
+    .video-form input:focus {
+      outline: 2px solid #e91e63;
+      outline-offset: 1px;
+    }
+    .video-form button {
+      background-color: #e91e63;
+      color: #fff;
+      border: 1px solid #e91e63;
+      padding: 12px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    .video-form button:hover {
+      background-color: #c2185b;
+    }
     #player-status {
       width: 100%;
       max-width: 800px;
@@ -36,32 +76,19 @@
       color: #bdbdbd;
       font-size: 14px;
     }
-    .song-list {
-      width: 100%;
-      max-width: 800px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 10px;
-    }
-    button {
-      background-color: #2a2a2a;
-      color: #fff;
-      border: 1px solid #444;
-      padding: 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      text-align: left;
-    }
-    button:hover {
-      background-color: #e91e63;
-      border-color: #e91e63;
+    @media (max-width: 420px) {
+      .video-form {
+        flex-direction: column;
+      }
+      .video-form button {
+        width: 100%;
+      }
     }
   </style>
 </head>
 <body>
 
-  <h3>🎤 コール練習＆公式動画プレイヤー</h3>
+  <h3>YouTubeプレーヤー</h3>
 
   <div class="video-container">
     <iframe
@@ -73,26 +100,73 @@
       referrerpolicy="strict-origin-when-cross-origin">
     </iframe>
   </div>
-  <p id="player-status" role="status" aria-live="polite">
-    Discordの新着動画通知から開くと、対象動画がここに表示されます。
-  </p>
 
-  <!-- 東京ドームのコール練習用プリセット（動画IDを書き換えて追加可能） -->
-  <div class="song-list">
-    <button onclick="playVideo('ここに動画IDを入れる')">🎵 コール練習曲 1</button>
-    <button onclick="playVideo('ここに動画IDを入れる')">🎵 コール練習曲 2</button>
-  </div>
+  <form class="video-form" id="video-form">
+    <input
+      id="video-url"
+      type="url"
+      inputmode="url"
+      placeholder="YouTube動画のリンクを貼り付け"
+      aria-label="YouTube動画のリンク"
+      autocomplete="off"
+      required>
+    <button type="submit">再生</button>
+  </form>
+
+  <p id="player-status" role="status" aria-live="polite">
+    YouTube動画のリンクを貼り付けると、上のプレーヤーで再生できます。
+  </p>
 
   <script>
     const VIDEO_ID_PATTERN = /^[0-9A-Za-z_-]{11}$/;
+
+    function extractVideoId(value) {
+      const input = (value || "").trim();
+      if (VIDEO_ID_PATTERN.test(input)) return input;
+
+      let url;
+      try {
+        url = new URL(input);
+      } catch {
+        return null;
+      }
+
+      const host = url.hostname.toLowerCase();
+      const allowedHosts = [
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "youtu.be",
+        "www.youtu.be",
+        "youtube-nocookie.com",
+        "www.youtube-nocookie.com"
+      ];
+
+      if (!allowedHosts.includes(host)) return null;
+
+      let videoId = null;
+
+      if (host === "youtu.be" || host === "www.youtu.be") {
+        videoId = url.pathname.split("/").filter(Boolean)[0];
+      } else if (url.pathname === "/watch") {
+        videoId = url.searchParams.get("v");
+      } else {
+        const pathParts = url.pathname.split("/").filter(Boolean);
+        if (["shorts", "embed", "live"].includes(pathParts[0])) {
+          videoId = pathParts[1];
+        }
+      }
+
+      return VIDEO_ID_PATTERN.test(videoId || "") ? videoId : null;
+    }
 
     function playVideo(videoId) {
       const status = document.getElementById("player-status");
       const player = document.getElementById("player");
 
       if (!VIDEO_ID_PATTERN.test(videoId || "")) {
-        status.textContent = "動画IDが正しくありません。Discordの新着動画通知から開いてください。";
-        return;
+        status.textContent = "YouTube動画のリンクを確認してください。";
+        return false;
       }
 
       const embedUrl =
@@ -102,8 +176,37 @@
 
       player.src = embedUrl;
       status.textContent =
-        "動画を読み込みました。自動再生がブロックされた場合は、プレイヤーの再生ボタンを押してください。";
+        "動画を読み込みました。自動再生されない場合は、プレーヤーの再生ボタンを押してください。";
+      return true;
     }
+
+    function playFromInput() {
+      const input = document.getElementById("video-url");
+      const videoId = extractVideoId(input.value);
+
+      if (!videoId) {
+        document.getElementById("player-status").textContent =
+          "有効なYouTube動画のリンクを貼り付けてください。";
+        return;
+      }
+
+      playVideo(videoId);
+    }
+
+    document.getElementById("video-form").addEventListener("submit", function (event) {
+      event.preventDefault();
+      playFromInput();
+    });
+
+    // リンクを貼り付けたときは、そのまま自動でプレーヤーに読み込む
+    document.getElementById("video-url").addEventListener("paste", function () {
+      const input = this;
+      setTimeout(function () {
+        if (extractVideoId(input.value)) {
+          playFromInput();
+        }
+      }, 0);
+    });
 
     window.addEventListener("DOMContentLoaded", function () {
       const params = new URLSearchParams(window.location.search);
