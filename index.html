@@ -104,17 +104,17 @@
   <form class="video-form" id="video-form">
     <input
       id="video-url"
-      type="url"
-      inputmode="url"
-      placeholder="YouTube動画のリンクを貼り付け"
-      aria-label="YouTube動画のリンク"
+      type="text"
+      inputmode="text"
+      placeholder="YouTube動画IDまたはリンクを貼り付け"
+      aria-label="YouTube動画IDまたはリンク"
       autocomplete="off"
       required>
     <button type="submit">再生</button>
   </form>
 
   <p id="player-status" role="status" aria-live="polite">
-    YouTube動画のリンクを貼り付けると、上のプレーヤーで再生できます。
+    YouTube動画ID（11文字）または動画リンクを貼り付けると、上のプレーヤーで再生できます。
   </p>
 
   <script>
@@ -122,6 +122,8 @@
 
     function extractVideoId(value) {
       const input = (value || "").trim();
+
+      // 動画IDだけが入力された場合
       if (VIDEO_ID_PATTERN.test(input)) return input;
 
       let url;
@@ -165,7 +167,7 @@
       const player = document.getElementById("player");
 
       if (!VIDEO_ID_PATTERN.test(videoId || "")) {
-        status.textContent = "YouTube動画のリンクを確認してください。";
+        status.textContent = "YouTube動画IDを確認してください。";
         return false;
       }
 
@@ -186,7 +188,7 @@
 
       if (!videoId) {
         document.getElementById("player-status").textContent =
-          "有効なYouTube動画のリンクを貼り付けてください。";
+          "有効なYouTube動画ID（11文字）または動画リンクを入力してください。";
         return;
       }
 
@@ -198,7 +200,7 @@
       playFromInput();
     });
 
-    // リンクを貼り付けたときは、そのまま自動でプレーヤーに読み込む
+    // 動画IDまたはリンクを貼り付けたとき、そのままプレーヤーに読み込む
     document.getElementById("video-url").addEventListener("paste", function () {
       const input = this;
       setTimeout(function () {
